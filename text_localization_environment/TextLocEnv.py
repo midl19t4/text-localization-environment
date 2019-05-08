@@ -41,7 +41,8 @@ class TextLocEnv(gym.Env):
                            7: self.taller,
                            8: self.trigger
                            }
-
+        # 224*224*3 (RGB image) + 9 * 10 (on-hot-enconded history) + 1 (penalty) = 150619
+        self.observation_space = spaces.Box(np.zeros(150619), np.array(150619 * [256]), dtype=np.float32)
         self.gpu_id = gpu_id
         if type(image_paths) is not list: image_paths = [image_paths]
         self.image_paths = image_paths
