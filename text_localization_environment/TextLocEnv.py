@@ -30,7 +30,6 @@ class TextLocEnv(gym.Env):
         :type true_bboxes: numpy.ndarray
         :type gpu_id: int
         """
-        self.feature_extractor = ResNet152Layers()
         self.action_space = spaces.Discrete(9)
         self.action_set = {0: self.right,
                            1: self.left,
@@ -47,9 +46,6 @@ class TextLocEnv(gym.Env):
         if type(image_paths) is not list: image_paths = [image_paths]
         self.image_paths = image_paths
         self.true_bboxes = true_bboxes
-
-        if self.gpu_id != -1:
-            self.feature_extractor.to_gpu(self.gpu_id)
 
         self.seed()
 
@@ -326,20 +322,8 @@ class TextLocEnv(gym.Env):
 
     def compute_state(self):
         penalty = np.float32(self.current_step * self.DURATION_PENALTY)
-
-        if self.gpu_id != -1:
-            return np.concatenate((cuda.to_cpu(self.extract_features().array), np.array(self.history).flatten(), np.array([penalty])))
-        else:
-            return np.concatenate((self.extract_features().array, np.array(self.history).flatten(), np.array([penalty])))
-
-    def extract_features(self):
-        """Extract features from the image using ResNet with 152 layers"""
         warped = self.get_warped_bbox_contents()
-        feature = self.feature_extractor.extract([warped], layers=['pool5'])['pool5']
-
-        warped.close()
-
-        return feature[0]
+        return np.concatenate((np.array(warped).flatten(), np.array(self.history).flatten(), np.array([penalty])))
 
     def to_one_hot(self, action):
         line = np.zeros(self.action_space.n, np.bool)
