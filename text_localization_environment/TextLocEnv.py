@@ -79,7 +79,7 @@ class TextLocEnv(gym.Env):
 
         info = self.find_positive_actions()
 
-        return self.state, reward, self.done, info
+        return self.state, reward, self.done, {'positive_actions' :info}
 
     def calculate_reward(self, action):
         reward = 0
@@ -324,7 +324,7 @@ class TextLocEnv(gym.Env):
     def compute_state(self):
         penalty = np.float32(self.current_step * self.DURATION_PENALTY)
         warped = self.get_warped_bbox_contents()
-        return np.concatenate((np.array(warped).flatten(), np.array(self.history).flatten(), np.array([penalty])))
+        return (np.array(warped), np.array(self.history), penalty)
 
     def to_one_hot(self, action):
         line = np.zeros(self.action_space.n, np.bool)
