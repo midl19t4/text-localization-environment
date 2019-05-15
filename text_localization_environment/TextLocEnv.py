@@ -324,7 +324,7 @@ class TextLocEnv(gym.Env):
     def compute_state(self):
         penalty = np.float32(self.current_step * self.DURATION_PENALTY)
         warped = self.get_warped_bbox_contents()
-        return (np.array(warped), np.array(self.history), np.array(penalty))
+        return (np.array(warped, dtype=np.float32), np.array(self.history), np.array(penalty))
 
     def to_one_hot(self, action):
         line = np.zeros(self.action_space.n, np.bool)
