@@ -42,7 +42,7 @@ class TextLocEnv(gym.Env):
                            8: self.trigger
                            }
         # 224*224*3 (RGB image) + 9 * 10 (on-hot-enconded history) + 1 (penalty) = 150619
-        self.observation_space = spaces.Box(np.zeros(150619), np.array(150619 * [256]), dtype=np.float32)
+        self.observation_space = spaces.Tuple([spaces.Box(low=0, high=256, shape=(224,244,3)), spaces.Box(low=0,high=1,shape=(10,10)), spaces.Box(low=np.array([0.0]),high=np.array([1000.0]), dtype=np.float32)])
         self.gpu_id = gpu_id
         if type(image_paths) is not list: image_paths = [image_paths]
         self.image_paths = image_paths
@@ -324,7 +324,7 @@ class TextLocEnv(gym.Env):
     def compute_state(self):
         penalty = np.float32(self.current_step * self.DURATION_PENALTY)
         warped = self.get_warped_bbox_contents()
-        return (np.array(warped), np.array(self.history), penalty)
+        return (np.array(warped), np.array(self.history), np.array(penalty))
 
     def to_one_hot(self, action):
         line = np.zeros(self.action_space.n, np.bool)
