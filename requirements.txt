@@ -1,5 +1,5 @@
 certifi==2018.10.15
-chainer==5.0.0
+chainer==6.0.0
 chardet==3.0.4
 fastrlock==0.4
 filelock==3.0.10
