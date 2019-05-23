@@ -12,7 +12,7 @@ from text_localization_environment.ImageMasker import ImageMasker
 class TextLocEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array', 'box']}
 
-    DURATION_PENALTY = 0.03
+    DURATION_PENALTY = 0.5
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
