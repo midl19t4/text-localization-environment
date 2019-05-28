@@ -12,7 +12,7 @@ from text_localization_environment.ImageMasker import ImageMasker
 class TextLocEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array', 'box']}
 
-    DURATION_PENALTY = 0.5
+    DURATION_PENALTY = 0.03
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
@@ -41,8 +41,8 @@ class TextLocEnv(gym.Env):
                            7: self.taller,
                            8: self.trigger
                            }
-        # 224*224*3 (RGB image) + 9 * 10 (on-hot-enconded history) + 1 (penalty) = 150619
-        self.observation_space = spaces.Tuple([spaces.Box(low=0, high=256, shape=(224,244,3)), spaces.Box(low=0,high=1,shape=(10,10)), spaces.Box(low=np.array([0.0]),high=np.array([1000.0]), dtype=np.float32)])
+        # 224*224*3 (RGB image) + 9 * 10 (on-hot-enconded history) = 150618
+        self.observation_space = spaces.Tuple([spaces.Box(low=0, high=256, shape=(224,244,3)), spaces.Box(low=0,high=1,shape=(10,10))])
         self.gpu_id = gpu_id
         if type(image_paths) is not list: image_paths = [image_paths]
         self.image_paths = image_paths
@@ -322,9 +322,8 @@ class TextLocEnv(gym.Env):
         return cropped.resize((224, 224), LANCZOS)
 
     def compute_state(self):
-        penalty = np.float32(self.current_step * self.DURATION_PENALTY)
         warped = self.get_warped_bbox_contents()
-        return (np.array(warped, dtype=np.float32), np.array(self.history), np.array(penalty))
+        return (np.array(warped, dtype=np.float32), np.array(self.history))
 
     def to_one_hot(self, action):
         line = np.zeros(self.action_space.n, np.bool)
