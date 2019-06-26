@@ -1,7 +1,6 @@
 import gym
 from gym import spaces
 from gym.utils import seeding
-from chainer.links import ResNet152Layers
 from chainer.backends import cuda
 from PIL import Image, ImageDraw
 from PIL.Image import LANCZOS, MAX_IMAGE_PIXELS
@@ -42,7 +41,7 @@ class TextLocEnv(gym.Env):
                            8: self.trigger
                            }
         # 224*224*3 (RGB image) + 9 * 10 (on-hot-enconded history) = 150618
-        self.observation_space = spaces.Tuple([spaces.Box(low=0, high=256, shape=(224,244,3)), spaces.Box(low=0,high=1,shape=(10,9))])
+        self.observation_space = spaces.Tuple([spaces.Box(low=0, high=256, shape=(224,224,3)), spaces.Box(low=0,high=1,shape=(10,9))])
         self.gpu_id = gpu_id
         if type(image_paths) is not list: image_paths = [image_paths]
         self.image_paths = image_paths
