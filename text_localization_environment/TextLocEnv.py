@@ -15,8 +15,6 @@ class TextLocEnv(gym.Env):
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
-    # τ: Threshold of intersection over union for the trigger action to yield a positive reward
-    TAU = 0.6
     # η: Reward of the trigger action
     ETA = 10.0
 
@@ -84,10 +82,7 @@ class TextLocEnv(gym.Env):
         reward = 0
 
         if self.action_set[action] == self.trigger:
-            if self.iou >= self.TAU:
                 reward = self.ETA
-            else:
-                reward = -self.ETA
         else:
             new_iou = self.compute_best_iou()
             reward = np.sign(new_iou - self.iou)
