@@ -82,7 +82,7 @@ class TextLocEnv(gym.Env):
         reward = 0
 
         if self.action_set[action] == self.trigger:
-                reward = self.ETA
+                reward = self.ETA * self.iou
         else:
             new_iou = self.compute_best_iou()
             reward = np.sign(new_iou - self.iou)
