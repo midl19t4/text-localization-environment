@@ -97,7 +97,7 @@ class TextLocEnv(gym.Env):
 
             self.iou = new_iou
 
-        return reward - self.current_step * self.DURATION_PENALTY
+        return reward - self.DURATION_PENALTY
 
     def calculate_potential_reward(self, action):
         old_bbox = self.bbox
