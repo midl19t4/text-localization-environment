@@ -237,7 +237,7 @@ class TextLocEnv(gym.Env):
 
     def trigger(self):
         self.done = True
-        self.create_ior_mark()
+        #self.create_ior_mark()
 
     @staticmethod
     def box_size(box):
