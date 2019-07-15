@@ -11,12 +11,12 @@ from text_localization_environment.ImageMasker import ImageMasker
 class TextLocEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array', 'box']}
 
-    DURATION_PENALTY = 0.03
+    DURATION_PENALTY = 0.1
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
     # η: Reward of the trigger action
-    ETA = 10.0
+    ETA = 5.0
 
     def __init__(self, image_paths, true_bboxes, gpu_id=-1):
         """
@@ -82,7 +82,7 @@ class TextLocEnv(gym.Env):
         reward = 0
 
         if self.action_set[action] == self.trigger:
-                reward = 1 + (self.ETA * self.iou)
+                reward = self.ETA
         else:
             new_iou = self.compute_best_iou()
             reward = np.sign(new_iou - self.iou)
@@ -230,10 +230,10 @@ class TextLocEnv(gym.Env):
         self.adjust_bbox(np.array([0.5, 0.5, -0.5, -0.5]))
 
     def fatter(self):
-        self.adjust_bbox(np.array([-1, 0, 1, 0]))
+        self.adjust_bbox(np.array([0, 0.5, 0, -0.5]))
 
     def taller(self):
-        self.adjust_bbox(np.array([0, -1, 0, 1]))
+        self.adjust_bbox(np.array([0.5, 0, -0.5, 0]))
 
     def trigger(self):
         self.done = True
