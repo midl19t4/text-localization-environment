@@ -11,12 +11,12 @@ from text_localization_environment.ImageMasker import ImageMasker
 class TextLocEnv(gym.Env):
     metadata = {'render.modes': ['human', 'rgb_array', 'box']}
 
-    DURATION_PENALTY = 0.1
+    DURATION_PENALTY = 0.03
     HISTORY_LENGTH = 10
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
     # η: Reward of the trigger action
-    ETA = 5.0
+    ETA = 7.0
 
     def __init__(self, image_paths, true_bboxes, gpu_id=-1):
         """
@@ -97,7 +97,7 @@ class TextLocEnv(gym.Env):
 
             self.iou = new_iou
 
-        return reward - self.DURATION_PENALTY
+        return reward - self.current_step * self.DURATION_PENALTY
 
     def calculate_potential_reward(self, action):
         old_bbox = self.bbox
