@@ -86,15 +86,6 @@ class TextLocEnv(gym.Env):
         else:
             new_iou = self.compute_best_iou()
             reward = np.sign(new_iou - self.iou)
-
-            if reward == 0:
-                self.steps_since_last_change += 1
-            else:
-                self.steps_since_last_change = 0
-
-            if self.steps_since_last_change >= 3:
-                reward = -1
-
             self.iou = new_iou
 
         return reward - self.current_step * self.DURATION_PENALTY
@@ -282,7 +273,6 @@ class TextLocEnv(gym.Env):
         self.done = False
         self.iou = self.compute_best_iou()
         self.max_iou = self.iou
-        self.steps_since_last_change = 0
 
         return self.state
 
