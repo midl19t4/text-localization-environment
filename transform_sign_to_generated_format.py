@@ -41,14 +41,13 @@ with open(os.path.join(DATASET_BASE_PATH, TARGET_DIR, 'image_locations.txt'), 'w
 
     for sample_meta_information in train_gt:
         bounding_boxes.append(format_bounding_boxes(sample_meta_information['bounding_boxes']))
-        path = sample_meta_information["file_name"].replace(SPLIT_KIND + '/', '')
+        path = sample_meta_information['file_name'].replace(SPLIT_KIND + '/', '')
         image_locations_txt.write(f'./{path}\n')
 
         img = Image.open(os.path.join(DATASET_BASE_PATH, SPLIT_KIND, path))
-        if img.mode != 'RGB':
+        if img.mode != TARGET_IMG_MODE:
             img = img.convert(TARGET_IMG_MODE)
         img = img.resize((TARGET_WIDTH_HEIGHT, TARGET_WIDTH_HEIGHT), Image.LANCZOS)
         img.save(os.path.join(DATASET_BASE_PATH, TARGET_DIR, path))
 
 np.save(os.path.join(DATASET_BASE_PATH, TARGET_DIR, 'bounding_boxes.npy'), bounding_boxes)
-
