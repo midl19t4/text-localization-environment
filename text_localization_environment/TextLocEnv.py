@@ -16,9 +16,9 @@ class TextLocEnv(gym.Env):
     # ⍺: factor relative to the current box size that is used for every transformation action
     ALPHA = 0.2
     # η: Reward of the trigger action
-    ETA = 7.0
+    ETA = 70.0
 
-    def __init__(self, image_paths, true_bboxes, gpu_id=-1):
+    def __init__(self, image_paths, true_bboxes, gpu_id=-1, reward_function='single'):
         """
         :param image_paths: The paths to the individual images
         :param true_bboxes: The true bounding boxes for each image
@@ -41,6 +41,11 @@ class TextLocEnv(gym.Env):
         # 224*224*3 (RGB image) + 9 * 10 (on-hot-enconded history) = 150618
         self.observation_space = spaces.Tuple([spaces.Box(low=0, high=256, shape=(224,224,3)), spaces.Box(low=0,high=1,shape=(10,9))])
         self.gpu_id = gpu_id
+        if self.gpu_id != -1:
+            cuda.Device(self.gpu_id).use() # define gpu id fix for all later operations
+
+        self.reward_function = reward_function
+
         if type(image_paths) is not list: image_paths = [image_paths]
         self.image_paths = image_paths
         self.true_bboxes = true_bboxes
@@ -67,7 +72,6 @@ class TextLocEnv(gym.Env):
         self.action_set[action]()
 
         reward = self.calculate_reward(action)
-        self.max_iou = max(self.iou, self.max_iou)
 
         self.history.insert(0, self.to_one_hot(action))
         self.history.pop()
@@ -80,13 +84,19 @@ class TextLocEnv(gym.Env):
         reward = 0
 
         if self.action_set[action] == self.trigger:
-            reward = 10 * self.ETA * self.iou - (self.current_step * self.DURATION_PENALTY)
-        else:
-            self.iou = self.compute_best_iou()
+            self.iou = self.compute_best_iou(self.episode_searched_bboxes)
+
+            if self.reward_function == "single":
+                iou_with_ior = self.compute_best_iou(self.episode_ior_bboxes)
+                reward = self.ETA * (self.iou - (iou_with_ior**2)) - (self.current_step * self.DURATION_PENALTY)
+
+            elif self.reward_function == "sum":
+                sum_ior_ious = 0
+                for ior_box in self.episode_ior_bboxes:
+                    sum_ior_ious += self.compute_iou(ior_box)
+                reward = self.ETA * (self.iou - (sum_ior_ious**2)) - (self.current_step * self.DURATION_PENALTY)
 
         return reward
-
-
 
     def create_empty_history(self):
         flat_history = np.repeat([False], self.HISTORY_LENGTH * self.action_space.n)
@@ -113,20 +123,23 @@ class TextLocEnv(gym.Env):
 
         return np.array([four_bbox, four_bbox, four_bbox])
 
-    def create_ior_mark(self):
+    def create_ior_mark(self, bbox):
         """
-        Creates an IoR (inhibition of return) mark that crosses out the current bounding box.
+        Creates an IoR (inhibition of return) mark on the current image that crosses out the given bounding box.
         This is necessary to find multiple objects within one image
+         :param bbox: Bounding box with two points, top left and bottom right
         """
         masker = ImageMasker(0)
 
-        center_height = round((self.bbox[3] + self.bbox[1]) / 2)
-        center_width = round((self.bbox[2] + self.bbox[0]) / 2)
-        height_frac = round((self.bbox[3] - self.bbox[1]) / 12)
-        width_frac = round((self.bbox[2] - self.bbox[0]) / 12)
+        bbox = [bbox[0][0], bbox[0][1], bbox[1][0], bbox[1][1]]
 
-        horizontal_box = [self.bbox[0], center_height - height_frac, self.bbox[2], center_height + height_frac]
-        vertical_box = [center_width - width_frac, self.bbox[1], center_width + width_frac, self.bbox[3]]
+        center_height = round((bbox[3] + bbox[1]) / 2)
+        center_width = round((bbox[2] + bbox[0]) / 2)
+        height_frac = round((bbox[3] - bbox[1]) / 12)
+        width_frac = round((bbox[2] - bbox[0]) / 12)
+
+        horizontal_box = [bbox[0], center_height - height_frac, bbox[2], center_height + height_frac]
+        vertical_box = [center_width - width_frac, bbox[1], center_width + width_frac, bbox[3]]
 
         horizontal_box_four_corners = self.to_four_corners_array(horizontal_box)
         vertical_box_four_corners = self.to_four_corners_array(vertical_box)
@@ -147,10 +160,10 @@ class TextLocEnv(gym.Env):
         else:
             self.episode_image = Image.fromarray(new_img.astype(np.uint8))
 
-    def compute_best_iou(self):
+    def compute_best_iou(self, bboxes):
         max_iou = 0
 
-        for box in self.episode_true_bboxes:
+        for box in bboxes:
             max_iou = max(max_iou, self.compute_iou(box))
 
         return max_iou
@@ -245,10 +258,23 @@ class TextLocEnv(gym.Env):
         self.current_step = 0
         self.state = self.compute_state()
         self.done = False
-        self.iou = self.compute_best_iou()
-        self.max_iou = self.iou
+
+        self.add_some_iors()
 
         return self.state
+
+    def add_some_iors(self):
+        """Add a random number of IoRs for correctly found bounding boxes"""
+        self.episode_ior_bboxes = []
+        self.episode_searched_bboxes = []
+        number_of_iors = self.np_random.randint(len(self.episode_true_bboxes))
+        for bbox_index in range(len(self.episode_true_bboxes)):
+            bbox = self.episode_true_bboxes[bbox_index]
+            if bbox_index < number_of_iors:
+                self.create_ior_mark(bbox)
+                self.episode_ior_bboxes.append(bbox)
+            else:
+                self.episode_searched_bboxes.append(bbox)
 
     def render(self, mode='human', return_as_file=False):
         """Render the current state"""
