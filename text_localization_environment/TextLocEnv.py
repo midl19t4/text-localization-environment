@@ -52,7 +52,8 @@ class TextLocEnv(gym.Env):
 
         self.seed()
 
-        self.episode_image = Image.new("RGB", (256, 256))
+        self.episode_image = Image.new("RGBA", (256, 256))
+        self.mask_array = np.zeros([256, 256, 1], dtype=np.int32)
         self.reset()
 
     def seed(self, seed=None):
@@ -151,14 +152,17 @@ class TextLocEnv(gym.Env):
             horizontal_box_four_corners = cuda.to_gpu(horizontal_box_four_corners, self.gpu_id)
             vertical_box_four_corners = cuda.to_gpu(vertical_box_four_corners, self.gpu_id)
 
-        new_img = array_module.array(self.episode_image, dtype=np.int32)
-        new_img = masker.mask_array(new_img, horizontal_box_four_corners, array_module)
-        new_img = masker.mask_array(new_img, vertical_box_four_corners, array_module)
+        self.mask_array = array_module.array(self.mask_array, dtype=np.int32)
+        self.mask_array = masker.mask_array(self.mask_array, horizontal_box_four_corners, array_module)
+        self.mask_array = masker.mask_array(self.mask_array, vertical_box_four_corners, array_module)
 
         if self.gpu_id != -1:
-            self.episode_image = Image.fromarray(cuda.to_cpu(new_img).astype(np.uint8))
+            to_cpu_mask = cuda.to_cpu(self.mask_array).astype(np.uint8)
+            mask_image = Image.fromarray(to_cpu_mask)
         else:
-            self.episode_image = Image.fromarray(new_img.astype(np.uint8))
+            mask_image = Image.fromarray(self.mask_array.astype(np.uint8))
+
+        self.episode_image = self.episode_image.putalpha(mask_image)
 
     def compute_best_iou(self, bboxes):
         max_iou = 0
@@ -249,10 +253,11 @@ class TextLocEnv(gym.Env):
         else:
             random_index = self.np_random.randint(len(self.image_paths))
             self.episode_image = Image.open(self.image_paths[random_index])
+            self.mask_array = np.zeros([256, 256, 1], dtype=np.int32)
             self.episode_true_bboxes = self.true_bboxes[random_index]
 
-        if self.episode_image.mode != 'RGB':
-            self.episode_image = self.episode_image.convert('RGB')
+        if self.episode_image.mode != 'RGBA':
+            self.episode_image = self.episode_image.convert('RGBA')
 
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.current_step = 0
