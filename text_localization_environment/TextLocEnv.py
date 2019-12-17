@@ -161,6 +161,7 @@ class TextLocEnv(gym.Env):
             to_cpu_mask = np.squeeze(to_cpu_mask, axis=(2,))
             mask_image = Image.fromarray(to_cpu_mask, mode="L")
         else:
+            self.mask_array = np.squeeze(self.mask_array, axis=(2,))
             mask_image = Image.fromarray(self.mask_array.astype(np.uint8))
 
         self.episode_image.putalpha(mask_image)
@@ -288,7 +289,7 @@ class TextLocEnv(gym.Env):
         if mode == 'human':
             copy = self.episode_image.copy()
             draw = ImageDraw.Draw(copy)
-            draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
+            draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255, 255))
             if return_as_file:
                 return copy
             copy.show()
@@ -302,7 +303,7 @@ class TextLocEnv(gym.Env):
         elif mode is 'rgb_array':
             copy = self.episode_image.copy()
             draw = ImageDraw.Draw(copy)
-            draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255))
+            draw.rectangle(self.bbox.tolist(), outline=(255, 255, 255, 255))
             return np.array(copy)
         else:
             super(TextLocEnv, self).render(mode=mode)
