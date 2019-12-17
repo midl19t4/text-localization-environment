@@ -52,8 +52,8 @@ class TextLocEnv(gym.Env):
 
         self.seed()
 
-        self.episode_image = Image.new("RGBA", (256, 256))
-        self.mask_array = np.zeros([256, 256, 1], dtype=np.int32)
+        self.episode_image = Image.new("RGBA", (224, 224))
+        self.mask_array = np.full([224, 224, 1], 255, dtype=np.int32)
         self.reset()
 
     def seed(self, seed=None):
@@ -158,11 +158,12 @@ class TextLocEnv(gym.Env):
 
         if self.gpu_id != -1:
             to_cpu_mask = cuda.to_cpu(self.mask_array).astype(np.uint8)
-            mask_image = Image.fromarray(to_cpu_mask)
+            to_cpu_mask = np.squeeze(to_cpu_mask, axis=(2,))
+            mask_image = Image.fromarray(to_cpu_mask, mode="L")
         else:
             mask_image = Image.fromarray(self.mask_array.astype(np.uint8))
 
-        self.episode_image = self.episode_image.putalpha(mask_image)
+        self.episode_image.putalpha(mask_image)
 
     def compute_best_iou(self, bboxes):
         max_iou = 0
@@ -253,14 +254,14 @@ class TextLocEnv(gym.Env):
         else:
             random_index = self.np_random.randint(len(self.image_paths))
             self.episode_image = Image.open(self.image_paths[random_index])
-            self.mask_array = np.zeros([256, 256, 1], dtype=np.int32)
+            self.mask_array = np.full([224, 224, 1], 255, dtype=np.int32)
             self.episode_true_bboxes = self.true_bboxes[random_index]
 
         if self.episode_image.mode != 'RGBA':
             self.episode_image = self.episode_image.convert('RGBA')
 
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
-        self.current_step = 0
+        self.current_step = self.mask_array
         self.state = self.compute_state()
         self.done = False
 
