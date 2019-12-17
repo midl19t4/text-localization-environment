@@ -38,8 +38,8 @@ class TextLocEnv(gym.Env):
                            7: self.taller,
                            8: self.trigger
                            }
-        # 224*224*3 (RGB image) + 9 * 10 (on-hot-enconded history) = 150618
-        self.observation_space = spaces.Tuple([spaces.Box(low=0, high=256, shape=(224,224,3)), spaces.Box(low=0,high=1,shape=(10,9))])
+        # 224*224*4 (RGBA image) + 9 * 10 (on-hot-enconded history) = 200794
+        self.observation_space = spaces.Tuple([spaces.Box(low=0, high=256, shape=(224,224,4)), spaces.Box(low=0,high=1,shape=(10,9))])
         self.gpu_id = gpu_id
         if self.gpu_id != -1:
             cuda.Device(self.gpu_id).use() # define gpu id fix for all later operations
