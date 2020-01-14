@@ -134,28 +134,16 @@ class TextLocEnv(gym.Env):
         masker = ImageMasker(0)
 
         bbox = [bbox[0][0], bbox[0][1], bbox[1][0], bbox[1][1]]
-
-        center_height = round((bbox[3] + bbox[1]) / 2)
-        center_width = round((bbox[2] + bbox[0]) / 2)
-        height_frac = round((bbox[3] - bbox[1]) / 12)
-        width_frac = round((bbox[2] - bbox[0]) / 12)
-
-        horizontal_box = [bbox[0], center_height - height_frac, bbox[2], center_height + height_frac]
-        vertical_box = [center_width - width_frac, bbox[1], center_width + width_frac, bbox[3]]
-
-        horizontal_box_four_corners = self.to_four_corners_array(horizontal_box)
-        vertical_box_four_corners = self.to_four_corners_array(vertical_box)
+        bbox_four_corners = self.to_four_corners_array(bbox)
 
         array_module = np
 
         if self.gpu_id != -1:
             array_module = cuda.cupy
-            horizontal_box_four_corners = cuda.to_gpu(horizontal_box_four_corners, self.gpu_id)
-            vertical_box_four_corners = cuda.to_gpu(vertical_box_four_corners, self.gpu_id)
+            bbox_four_corners = cuda.to_gpu(bbox_four_corners, self.gpu_id)
 
         new_img = array_module.array(self.episode_image, dtype=np.int32)
-        new_img = masker.mask_array(new_img, horizontal_box_four_corners, array_module)
-        new_img = masker.mask_array(new_img, vertical_box_four_corners, array_module)
+        new_img = masker.mask_array(new_img, bbox_four_corners, array_module)
 
         if self.gpu_id != -1:
             self.episode_image = Image.fromarray(cuda.to_cpu(new_img).astype(np.uint8))
