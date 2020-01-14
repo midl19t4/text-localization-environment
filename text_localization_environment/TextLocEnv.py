@@ -262,7 +262,7 @@ class TextLocEnv(gym.Env):
             self.episode_image = self.episode_image.convert('RGBA')
 
         self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
-        self.current_step = self.mask_array
+        self.current_step = 0
         self.state = self.compute_state()
         self.done = False
 
