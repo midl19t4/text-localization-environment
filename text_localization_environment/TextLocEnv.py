@@ -50,14 +50,10 @@ class TextLocEnv(gym.Env):
         self.image_paths = image_paths
         self.true_bboxes = true_bboxes
 
-        self.seed()
+        self.np_random, _ = seeding.np_random(None)
 
         self.episode_image = Image.new("RGB", (256, 256))
         self.reset()
-
-    def seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
 
     def step(self, action):
         """Execute an action and return
@@ -84,15 +80,15 @@ class TextLocEnv(gym.Env):
         reward = 0
 
         if self.action_set[action] == self.trigger:
-            self.iou = self.compute_best_iou(self.episode_searched_bboxes)
+            self.iou = self.compute_best_iou(self.episode_not_found_bboxes)
 
             if self.reward_function == "single":
-                iou_with_ior = self.compute_best_iou(self.episode_ior_bboxes)
+                iou_with_ior = self.compute_best_iou(self.episode_found_bboxes)
                 reward = self.ETA * (self.iou - (iou_with_ior**2)) - (self.current_step * self.DURATION_PENALTY)
 
             elif self.reward_function == "sum":
                 sum_ior_ious = 0
-                for ior_box in self.episode_ior_bboxes:
+                for ior_box in self.episode_found_bboxes:
                     sum_ior_ious += self.compute_iou(ior_box)
                 reward = self.ETA * (self.iou - (sum_ior_ious**2)) - (self.current_step * self.DURATION_PENALTY)
 
@@ -123,6 +119,9 @@ class TextLocEnv(gym.Env):
 
         return np.array([four_bbox, four_bbox, four_bbox])
 
+    def tuple_to_array(self, bbox):
+        return [bbox[0][0], bbox[0][1], bbox[1][0], bbox[1][1]]
+
     def create_ior_mark(self, bbox):
         """
         Creates an IoR (inhibition of return) mark on the current image that crosses out the given bounding box.
@@ -131,18 +130,7 @@ class TextLocEnv(gym.Env):
         """
         masker = ImageMasker(0)
 
-        bbox = [bbox[0][0], bbox[0][1], bbox[1][0], bbox[1][1]]
-
-        center_height = round((bbox[3] + bbox[1]) / 2)
-        center_width = round((bbox[2] + bbox[0]) / 2)
-        height_frac = round((bbox[3] - bbox[1]) / 12)
-        width_frac = round((bbox[2] - bbox[0]) / 12)
-
-        horizontal_box = [bbox[0], center_height - height_frac, bbox[2], center_height + height_frac]
-        vertical_box = [center_width - width_frac, bbox[1], center_width + width_frac, bbox[3]]
-
-        horizontal_box_four_corners = self.to_four_corners_array(horizontal_box)
-        vertical_box_four_corners = self.to_four_corners_array(vertical_box)
+        bbox_four_corners = self.to_four_corners_array(bbox)
 
         array_module = np
 
@@ -173,16 +161,16 @@ class TextLocEnv(gym.Env):
         intersection = self.compute_intersection(other_bbox)
 
         area_1 = (self.bbox[2] - self.bbox[0]) * (self.bbox[3] - self.bbox[1])
-        area_2 = (other_bbox[1][0] - other_bbox[0][0]) * (other_bbox[1][1] - other_bbox[0][1])
+        area_2 = (other_bbox[2] - other_bbox[0]) * (other_bbox[3] - other_bbox[1])
         union = area_1 + area_2 - intersection
 
         return intersection / union
 
     def compute_intersection(self, other_bbox):
-        left = max(self.bbox[0], other_bbox[0][0])
-        top = max(self.bbox[1], other_bbox[0][1])
-        right = min(self.bbox[2], other_bbox[1][0])
-        bottom = min(self.bbox[3], other_bbox[1][1])
+        left = max(self.bbox[0], other_bbox[0])
+        top = max(self.bbox[1], other_bbox[1])
+        right = min(self.bbox[2], other_bbox[2])
+        bottom = min(self.bbox[3], other_bbox[3])
 
         if right < left or bottom < top:
             return 0
@@ -242,14 +230,21 @@ class TextLocEnv(gym.Env):
             self.history = self.create_empty_history()
             self.episode_image.close()
 
-        if image_index is not None:
-            if not stay_on_image:
-                self.episode_image = Image.open(self.image_paths[image_index])
-                self.episode_true_bboxes = self.true_bboxes[image_index]
+            if image_index is None:
+                image_index = self.np_random.randint(len(self.image_paths))
+
+            self.episode_image = Image.open(self.image_paths[image_index])
+            self.episode_true_bboxes = self.true_bboxes[image_index]
+            self.episode_true_bboxes = list(map(self.tuple_to_array, self.episode_true_bboxes))
+
+            self.episode_found_bboxes = []
+            self.episode_not_found_bboxes = copy.copy(self.episode_true_bboxes)
         else:
-            random_index = self.np_random.randint(len(self.image_paths))
-            self.episode_image = Image.open(self.image_paths[random_index])
-            self.episode_true_bboxes = self.true_bboxes[random_index]
+            found_word_bbox = self.current_best_bbox(self.episode_not_found_bboxes)
+            if found_word_bbox:
+                self.episode_found_bboxes.append(found_word_bbox)
+                self.episode_not_found_bboxes.remove(found_word_bbox)
+            self.create_ior_mark(self.bbox)
 
         if self.episode_image.mode != 'RGB':
             self.episode_image = self.episode_image.convert('RGB')
