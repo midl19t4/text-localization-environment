@@ -6,6 +6,7 @@ from PIL import Image, ImageDraw
 from PIL.Image import LANCZOS, MAX_IMAGE_PIXELS
 import numpy as np
 from text_localization_environment.ImageMasker import ImageMasker
+import copy
 
 
 class TextLocEnv(gym.Env):
@@ -27,6 +28,10 @@ class TextLocEnv(gym.Env):
         :type true_bboxes: numpy.ndarray
         :type gpu_id: int
         """
+
+        # initialize self
+        self.done = False
+
         self.action_space = spaces.Discrete(9)
         self.action_set = {0: self.right,
                            1: self.left,
@@ -46,7 +51,8 @@ class TextLocEnv(gym.Env):
 
         self.reward_function = reward_function
 
-        if type(image_paths) is not list: image_paths = [image_paths]
+        if type(image_paths) is not list:
+            image_paths = [image_paths]
         self.image_paths = image_paths
         self.true_bboxes = true_bboxes
 
@@ -136,21 +142,29 @@ class TextLocEnv(gym.Env):
 
         if self.gpu_id != -1:
             array_module = cuda.cupy
-            horizontal_box_four_corners = cuda.to_gpu(horizontal_box_four_corners, self.gpu_id)
-            vertical_box_four_corners = cuda.to_gpu(vertical_box_four_corners, self.gpu_id)
+            bbox_four_corners = cuda.to_gpu(bbox_four_corners, self.gpu_id)
 
         new_img = array_module.array(self.episode_image, dtype=np.int32)
-        new_img = masker.mask_array(new_img, horizontal_box_four_corners, array_module)
-        new_img = masker.mask_array(new_img, vertical_box_four_corners, array_module)
+        new_img = masker.mask_array(new_img, bbox_four_corners, array_module)
 
         if self.gpu_id != -1:
             self.episode_image = Image.fromarray(cuda.to_cpu(new_img).astype(np.uint8))
         else:
             self.episode_image = Image.fromarray(new_img.astype(np.uint8))
 
+    def current_best_bbox(self, bboxes):
+        best_bbox = None
+        max_iou = 0
+        for box in bboxes:
+            current_iou = self.compute_iou(box)
+            max_iou = max(max_iou, current_iou)
+            if max_iou == current_iou:
+                best_bbox = box
+
+        return best_bbox
+
     def compute_best_iou(self, bboxes):
         max_iou = 0
-
         for box in bboxes:
             max_iou = max(max_iou, self.compute_iou(box))
 
@@ -203,7 +217,6 @@ class TextLocEnv(gym.Env):
 
     def trigger(self):
         self.done = True
-        #self.create_ior_mark()
 
     @staticmethod
     def box_size(box):
@@ -224,7 +237,7 @@ class TextLocEnv(gym.Env):
         if self.box_size(new_box) < MAX_IMAGE_PIXELS:
             self.bbox = new_box
 
-    def reset(self, image_index=None, stay_on_image=False):
+    def reset(self, image_index=None, stay_on_image=False, start_bbox=None, add_random_iors=True):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
         if not stay_on_image:
             self.history = self.create_empty_history()
@@ -249,27 +262,32 @@ class TextLocEnv(gym.Env):
         if self.episode_image.mode != 'RGB':
             self.episode_image = self.episode_image.convert('RGB')
 
-        self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
+        if start_bbox is None:
+            self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
+        else:
+            self.bbox = start_bbox
+
         self.current_step = 0
         self.state = self.compute_state()
         self.done = False
 
-        self.add_some_iors()
+        if add_random_iors:
+            self.add_random_iors()
 
         return self.state
 
-    def add_some_iors(self):
+    def add_random_iors(self):
         """Add a random number of IoRs for correctly found bounding boxes"""
-        self.episode_ior_bboxes = []
-        self.episode_searched_bboxes = []
+        self.episode_found_bboxes = []
+        self.episode_not_found_bboxes = []
         number_of_iors = self.np_random.randint(len(self.episode_true_bboxes))
         for bbox_index in range(len(self.episode_true_bboxes)):
             bbox = self.episode_true_bboxes[bbox_index]
             if bbox_index < number_of_iors:
                 self.create_ior_mark(bbox)
-                self.episode_ior_bboxes.append(bbox)
+                self.episode_found_bboxes.append(bbox)
             else:
-                self.episode_searched_bboxes.append(bbox)
+                self.episode_not_found_bboxes.append(bbox)
 
     def render(self, mode='human', return_as_file=False):
         """Render the current state"""
@@ -302,7 +320,7 @@ class TextLocEnv(gym.Env):
 
     def compute_state(self):
         warped = self.get_warped_bbox_contents()
-        return (np.array(warped, dtype=np.float32), np.array(self.history))
+        return np.array(warped, dtype=np.float32), np.array(self.history)
 
     def to_one_hot(self, action):
         line = np.zeros(self.action_space.n, np.bool)
