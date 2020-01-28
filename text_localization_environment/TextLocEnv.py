@@ -31,8 +31,10 @@ class TextLocEnv(gym.Env):
 
         # initialize self
         self.done = False
+        # init with finish == True -> new image gets loaded
+        self.finish = True
 
-        self.action_space = spaces.Discrete(9)
+        self.action_space = spaces.Discrete(10)
         self.action_set = {0: self.right,
                            1: self.left,
                            2: self.up,
@@ -41,10 +43,11 @@ class TextLocEnv(gym.Env):
                            5: self.smaller,
                            6: self.fatter,
                            7: self.taller,
-                           8: self.trigger
+                           8: self.trigger,
+                           9: self.terminate
                            }
-        # 224*224*3 (RGB image) + 9 * 10 (on-hot-enconded history) = 150618
-        self.observation_space = spaces.Tuple([spaces.Box(low=0, high=256, shape=(224,224,3)), spaces.Box(low=0,high=1,shape=(10,9))])
+        # 224*224*3 (RGB image) + 10 * 10 (on-hot-enconded history) = 150618
+        self.observation_space = spaces.Tuple([spaces.Box(low=0, high=256, shape=(224,224,3)), spaces.Box(low=0,high=1,shape=(10,10))])
         self.gpu_id = gpu_id
         if self.gpu_id != -1:
             cuda.Device(self.gpu_id).use() # define gpu id fix for all later operations
@@ -98,6 +101,9 @@ class TextLocEnv(gym.Env):
                 for ior_box in self.episode_found_bboxes:
                     sum_ior_ious += self.compute_iou(ior_box)
                 reward = self.ETA * (self.iou - (sum_ior_ious**2)) - (self.current_step * self.DURATION_PENALTY)
+
+        elif self.action_set[action] == self.terminate:
+            reward = self.ETA * len(self.episode_found_bboxes) / len(self.episode_true_bboxes)
 
         return reward
 
@@ -186,7 +192,10 @@ class TextLocEnv(gym.Env):
             if max_iou == current_iou:
                 best_bbox = box
 
-        return best_bbox
+        if max_iou > 0.5:
+            return best_bbox
+        else:
+            return False
 
     def compute_best_iou(self, bboxes):
         max_iou = 0
@@ -243,6 +252,9 @@ class TextLocEnv(gym.Env):
     def trigger(self):
         self.done = True
 
+    def terminate(self):
+        self.finish = True
+
     @staticmethod
     def box_size(box):
         width = box[2] - box[0]
@@ -262,9 +274,9 @@ class TextLocEnv(gym.Env):
         if self.box_size(new_box) < MAX_IMAGE_PIXELS:
             self.bbox = new_box
 
-    def reset(self, image_index=None, stay_on_image=False, start_bbox=None, add_random_iors=True):
+    def reset(self, image_index=None):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
-        if not stay_on_image:
+        if self.finish:
             self.history = self.create_empty_history()
             self.episode_image.close()
 
@@ -278,41 +290,24 @@ class TextLocEnv(gym.Env):
             self.episode_found_bboxes = []
             self.episode_not_found_bboxes = copy.copy(self.episode_true_bboxes)
         else:
+            # not finished but done
             found_word_bbox = self.current_best_bbox(self.episode_not_found_bboxes)
             if found_word_bbox:
                 self.episode_found_bboxes.append(found_word_bbox)
                 self.episode_not_found_bboxes.remove(found_word_bbox)
+
             self.create_ior_mark(self.bbox)
 
         if self.episode_image.mode != 'RGB':
             self.episode_image = self.episode_image.convert('RGB')
 
-        if start_bbox is None:
-            self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
-        else:
-            self.bbox = start_bbox
-
+        self.bbox = np.array([0, 0, self.episode_image.width, self.episode_image.height])
         self.current_step = 0
         self.state = self.compute_state()
         self.done = False
-
-        if add_random_iors:
-            self.add_random_iors()
+        self.finish = False
 
         return self.state
-
-    def add_random_iors(self):
-        """Add a random number of IoRs for correctly found bounding boxes"""
-        self.episode_found_bboxes = []
-        self.episode_not_found_bboxes = []
-        number_of_iors = self.np_random.randint(len(self.episode_true_bboxes))
-        for bbox_index in range(len(self.episode_true_bboxes)):
-            bbox = self.episode_true_bboxes[bbox_index]
-            if bbox_index < number_of_iors:
-                self.create_ior_mark(bbox)
-                self.episode_found_bboxes.append(bbox)
-            else:
-                self.episode_not_found_bboxes.append(bbox)
 
     def render(self, mode='human', return_as_file=False):
         """Render the current state"""
