@@ -282,7 +282,8 @@ class TextLocEnv(gym.Env):
             if found_word_bbox:
                 self.episode_found_bboxes.append(found_word_bbox)
                 self.episode_not_found_bboxes.remove(found_word_bbox)
-            self.create_ior_mark(self.bbox)
+            if self.done:
+                self.create_ior_mark(self.bbox)
 
         if self.episode_image.mode != 'RGB':
             self.episode_image = self.episode_image.convert('RGB')
