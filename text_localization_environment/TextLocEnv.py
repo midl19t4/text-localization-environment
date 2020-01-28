@@ -18,8 +18,10 @@ class TextLocEnv(gym.Env):
     ALPHA = 0.2
     # η: Reward of the trigger action
     ETA = 70.0
+    # Training enlarge factor of true bboxes
+    ENLARGE = 0.1
 
-    def __init__(self, image_paths, true_bboxes, gpu_id=-1, reward_function='single', ior_marker='box'):
+    def __init__(self, image_paths, true_bboxes, gpu_id=-1, reward_function='single', ior_marker='box', enlarge_bboxes=False):
         """
         :param image_paths: The paths to the individual images
         :param true_bboxes: The true bounding boxes for each image
@@ -51,6 +53,7 @@ class TextLocEnv(gym.Env):
 
         self.reward_function = reward_function
         self.ior_marker = ior_marker
+        self.enlarge_bboxes = enlarge_bboxes
 
         if type(image_paths) is not list:
             image_paths = [image_paths]
@@ -262,7 +265,7 @@ class TextLocEnv(gym.Env):
         if self.box_size(new_box) < MAX_IMAGE_PIXELS:
             self.bbox = new_box
 
-    def reset(self, image_index=None, stay_on_image=False, start_bbox=None, add_random_iors=True):
+    def reset(self, image_index=None, stay_on_image=False, start_bbox=None, training=True):
         """Reset the environment to its initial state (the bounding box covers the entire image"""
         if not stay_on_image:
             self.history = self.create_empty_history()
@@ -297,10 +300,27 @@ class TextLocEnv(gym.Env):
         self.state = self.compute_state()
         self.done = False
 
-        if add_random_iors:
+        if training:
             self.add_random_iors()
 
+            if self.enlarge_bboxes:
+                # enlarge true bboxes by 10% right and left (random_ior)
+                self.episode_not_found_bboxes = self.enlarge_true_bboxes(self.episode_not_found_bboxes)
+
         return self.state
+
+    def enlarge_true_bboxes(self, bboxes):
+        large_bboxes = []
+        for bbox in bboxes:
+            puffer = int(round((bbox[2] - bbox[0]) * self.ENLARGE))
+            new_left = bbox[0] - puffer
+            new_right = bbox[2] + puffer
+
+            new_left = new_left if new_left >= 0 else 0
+
+            large_bbox = [new_left, bbox[1], new_right, bbox[3]]
+            large_bboxes.append(large_bbox)
+        return large_bboxes
 
     def add_random_iors(self):
         """Add a random number of IoRs for correctly found bounding boxes"""
