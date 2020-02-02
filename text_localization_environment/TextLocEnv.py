@@ -84,14 +84,13 @@ class TextLocEnv(gym.Env):
 
         self.state = self.compute_state()
 
-        return self.state, reward, self.done, {}
+        return self.state, reward, self.done, {'finish': self.finish}
 
     def calculate_reward(self, action):
         reward = 0
 
+        self.iou = self.compute_best_iou(self.episode_not_found_bboxes)
         if self.action_set[action] == self.trigger:
-            self.iou = self.compute_best_iou(self.episode_not_found_bboxes)
-
             if self.reward_function == "single":
                 iou_with_ior = self.compute_best_iou(self.episode_found_bboxes)
                 reward = self.ETA * (self.iou - (iou_with_ior**2)) - (self.current_step * self.DURATION_PENALTY)
